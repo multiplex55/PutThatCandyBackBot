@@ -10,7 +10,7 @@ To Execute code:
 
 Must have a file called ".env" that is in the following format:
 
-# .env
+"# .env"
 DISCORD_TOKEN="KEY HERE"
 
 GIPHY_TOKEN="KEY HERE"
