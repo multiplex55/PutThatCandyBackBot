@@ -3,6 +3,7 @@
 To Execute code:
 
 * Launch Anaconda Prompt
+* Navigate to directory of code
 * "Python bot.py"
 * ( Ctrl + C to cancel bot from prompt)
 
