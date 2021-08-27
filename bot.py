@@ -17,6 +17,12 @@ from discord.voice_client import VoiceClient
 import datetime
 from urllib import parse, request
 import re
+import hashlib
+import sqlite3
+
+# notes and todo
+# gay duration
+# achievements
 
 load_dotenv()
 discord_token = os.getenv('DISCORD_TOKEN')
@@ -28,6 +34,12 @@ client = discord.Client()
 
 votes = []
 
+#check if database is made and load it
+db = sqlite3.connect('quotes.db')
+cursor = db.cursor()
+cursor.execute('CREATE TABLE IF NOT EXISTS quotes(hash TEXT primary key, user TEXT, message TEXT, date_added TEXT)')
+print("Loaded database")
+db.commit()
 
 @bot.event
 async def on_ready():
@@ -171,7 +183,6 @@ def CreateCommandHelpFile():
 
 #setup helpfile
 listHelp = CreateCommandHelpFile()
-
 bot.remove_command('help')
 @bot.command(name='help', help='Prints this message usage: help')
 async def cmd_help(ctx):
@@ -181,33 +192,110 @@ async def cmd_help(ctx):
 
     await ctx.send(embed=embed)
 
-# @client.event
-# async def on_message(message):
-#     print(message)
+#Quotes
+#maybe add aliases=[] here eventually after fixing help
+@bot.command(name='quoterandom', help='random quote')
+async def quote_random(ctx):
+    cursor.execute("SELECT user,message,date_added FROM quotes ORDER BY RANDOM() LIMIT 1")
+    query = cursor.fetchone()
+
+    #log
+    print(query[0]+": \""+query[1]+"\" printed to the screen "+str(query[2]))
+
+    #embeds the output
+    style = discord.Embed(name="responding quote", description="- "+str(query[0])+" "+str(query[2]))
+    style.set_author(name=str(query[1]))
+    await ctx.send(embed=style)
+
+@bot.command(name='quote', help='quote somebody')
+async def quote(ctx):
+    #identify if there is a user quoted in the string
+    split_string = str(ctx.message.content).split()
+
+    if(len(split_string) == 1):
+        await quote_random(ctx)
+        return
+    found_user = False
+    user = ""
+
+    text = ""
+    for part in split_string:
+        if "<@!" in part:
+            found_user = True
+            user = part
+        elif "quote" in part:
+            pass
+        else:
+            text += part + " "
+
+    print(text)
+    if not found_user:
+        await ctx.send("There must be a user in the string")
+        return
+
+    uniqueID = hash(user+text)
+
+    #date and time of the message
+    time = datetime.datetime.now()
+    formatted_time = str(time.strftime("%d-%m-%Y %H:%M"))
+
+    #find if message is in the db already
+    cursor.execute("SELECT count(*) FROM quotes WHERE hash = ?",(uniqueID,))
+    find = cursor.fetchone()[0]
+
+    if find>0:
+        return
+
+    #insert into database
+    cursor.execute("INSERT INTO quotes VALUES(?,?,?,?)",(uniqueID,user,text,formatted_time))
+    await ctx.send("Quote successfully added")
+
+    db.commit()
+
+    #number of words in the database
+    rows = cursor.execute("SELECT * from quotes")
+
+    #log to terminal
+    print(str(len(rows.fetchall()))+". added - "+str(user)+": \""+str(text)+"\" to database at "+formatted_time)
+
+@bot.command(name='getquote', help='quote somebody')
+async def getquote(ctx):
+
+    #sanitise name
+    user = (ctx.author)
+    print(user)
+
+    try:
+        #query random quote from user
+        cursor.execute("SELECT message,date_added FROM quotes WHERE user=(?) ORDER BY RANDOM() LIMIT 1",user)
+        query = cursor.fetchone()
+
+        #adds quotes to message
+        output = "\""+str(query[0])+"\""
+
+        #log
+        print(ctx.message+": \""+output+"\" printed to the screen "+str(query[1]))
+
+        #embeds the output to make it pretty
+        style = discord.Embed(name="responding quote", description="- "+ctx.message+" "+str(query[1]))
+        style.set_author(name=output)
+        await ctx.send(embed=style)
+
+    except Exception:
+
+        await ctx.send("No quotes of that user found")
+
+    db.commit()
 
 @tasks.loop(seconds=5)
 async def bot_background_task():
+    # vote background task
     global votes
     if len(votes) > 0:
         t = time.time()
         for v in votes:
             print(v['message'].reactions)
             if v['expires'] < t:
-                # print(v['message'])
-                # print(v['message'].channel.name)
-                # print(client.get_all_channels())
-                # for guild in client.guilds:
-                #     for channel in guild.channels:
-                #         print(channel)
-                # channel_vote_came_from = get_channel(client.get_all_channels(), v['message'].channel.name)
-                # await v['message'].channel.send('asdf')
-                # print(channel_vote_came_from)
-                # v['message'] = await client.get_guild(v['message'].guild.id).get_channel(v['message'].id)
-
-                #await v['ctx'].send('test')
-
-
-
                 if len(v['ctx'].message.reactions) > 0:
 
                     dictReactions = {}
@@ -218,13 +306,11 @@ async def bot_background_task():
 
                     print(dictReactions)
 
-
                     users_voted_for = list(set(dictReactions['\U0001F44D']) - set(dictReactions['\U0001F44E']))
                     users_voted_against = list(set(dictReactions['\U0001F44E']) - set(dictReactions['\U0001F44D']))
 
                     print(users_voted_for)
                     print(users_voted_against)
-
 
                     double_voters = len([x for x in users_voted_for if x in users_voted_against]) - 1
 
@@ -239,13 +325,6 @@ async def bot_background_task():
                     del v
 
                     votes[:] = [v for v in votes if v['expires'] > t]
-
-@bot.command(name='test', help='my test function')
-async def test(ctx):
-    global votes
-    for v in votes:
-        print(v['ctx'].message.reactions)
-    return
 
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -265,9 +344,16 @@ async def on_reaction_add(reaction, user):
     print(reaction.message.reactions)
 
 @bot.event
-async def on_reaction_remove(reaction, user):
-    print(user, "added", reaction, "to", reaction.message)
+async def on_message(message):
+    print(message)
+    return
 
+@bot.command(name='test', help='my test function')
+async def test(ctx):
+    global votes
+    for v in votes:
+        print(v['ctx'].message.reactions)
+    return
 bot_background_task.start()
 bot.run(discord_token)
 
