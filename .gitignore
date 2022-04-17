@@ -2,3 +2,6 @@
 .env
 Anaconda Powershell Prompt (anaconda3).lnk
 quotes.db
+startBot.bat
+ptcb.db
+archive_quotes.db
