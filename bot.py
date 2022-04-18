@@ -415,9 +415,10 @@ async def gamba_get_points(ctx):
     cursor.execute(f"SELECT points FROM gamba WHERE user = '{userID}'")
     query = cursor.fetchone()    
     #do they have anything?
-    if query:        
-        message = await ctx.send(f"Hi {userName}! You have {query[0]} points!")        
-        await bot_cleanup(ctx, message)
+    if query:                
+        message = await ctx.send(f"Hi {userName}! You have {query[0]} points!\n{await int_to_english(query[0])}")        
+        if(not in_bot_channel):
+            await bot_cleanup(ctx, message)
     else:
         message = await ctx.send(f"Hi {userName} I did not find you in our database, adding you with 0 points")    
         await gamba_initalize_user(userID, userName)                
@@ -452,7 +453,48 @@ async def gamba_initalize_user(userID, userName):
     print(f"Added user {userName} to the gamba table with id of {userID}")
     db.commit()
 
-@bot.command(name='gambaboard', aliases=['board'], help='slot machine Usage: gambaslots {num}')
+@bot.command(name='gambagivepoints',help='Give points to another player Usage: givepoints # UserName', aliases=['givepoints'])
+async def gamba_give_points(ctx):
+    userID = ctx.author.id
+    userName = ctx.author.name
+    in_bot_channel = ctx.channel.id == channel_bot_commands
+    
+    return
+
+async def int_to_english(num):
+    names = { 6  : "Thousand",
+              9  : "Million",
+              12 : "Billion",
+              15 : "Trillion",
+              18 : "Quadrillion",
+              21 : "Quintillion",
+              24 : "Sextillion",
+              27 : "Septillion",
+              30 : "Octillion",
+              33 : "Nonillion",
+              36 : "Decillion",
+              39 : "Undecillion",
+              42 : "Duodecillion",
+              45 : "Tredecillion",
+              48 : "Quattuordecillion",
+              51 : "Quindecillion",
+              54 : "Sexdecillion",
+              57 : "Septendecillion",
+              60 : "Octodecillion",
+              63 : "Novemdecillion",
+              66 : "Vigintillion",
+              69 : "Centillion",
+              }
+    str_num = str(num)
+    num_char = len(str_num)
+    while num_char not in names.keys():
+        num_char += 1
+    ms_num = str_num
+    while len(ms_num) > 3:
+        ms_num = ms_num[:-3]
+    return f"{ms_num} {names[num_char]}"
+
+@bot.command(name='gambaboard',help='slot machine Usage: gambaslots {num}', aliases=['board'])
 async def gamba_board(ctx):
     userID = ctx.author.id
     userName = ctx.author.name
@@ -487,8 +529,7 @@ async def gamba_board(ctx):
     message = await ctx.send(embed=embed)
     if(not in_bot_channel):
         await bot_cleanup(ctx, message)
-            
-    
+                
 @tasks.loop(seconds=300)
 async def gamba_update_all_user_points():
     points_online = 2500
@@ -508,18 +549,6 @@ async def gamba_update_all_user_points():
                 else:
                     print(f"user found for member {mem.id} {mem.name}")   
                     await update_gamba_points(mem.id, points_in_vc)
-                # if mem.raw_status == "online":
-                #     userID = mem.id
-                #         #find if message is in the db already
-                #     cursor.execute(f"SELECT * FROM gamba WHERE user='{userID}'")                    
-                #     query = cursor.fetchone()
-
-                #     if not query:
-                #         print(f"no user found for member {mem.id} {mem.name}")
-                #         await gamba_initalize_user(mem.id, mem.name)                                                
-                #     else:
-                #         print(f"user found for member {mem.id} {mem.name}")   
-                #         await update_gamba_points(mem.id, points_in_vc)
         # async for mem in guild.fetch_members(limit=150):
         # members = [member for member in bot.get_all_members() if not member.bot]
         for mem in guild.members:            
@@ -535,32 +564,11 @@ async def gamba_update_all_user_points():
                         await gamba_initalize_user(mem.id, mem.name)                                                
                     else:
                         print(f"user found for member {mem.id} {mem.name}")   
-                        await update_gamba_points(mem.id, points_online)
-            # if not mem.bot and mem.raw_status == "online":
-            #     userID = mem.id
-            #         #find if message is in the db already
-            #     cursor.execute(f"SELECT * FROM gamba WHERE user='{userID}'")                    
-            #     query = cursor.fetchone()
-
-            #     if not query:
-            #         print(f"no user found for member {mem.id} {mem.name}")
-            #         await gamba_initalize_user(mem.id, mem.name)                                                
-            #     else:
-            #         print(f"user found for member {mem.id} {mem.name}")   
-            #         await update_gamba_points(mem.id, points_online)
-                    
-                # print(f"member name {mem.name}")  
-                # print(f"status {mem.status}")
-                # print(f"id {mem.id}")            
-                # print(f"raw_status {mem.raw_status}")
-                # print(f"desktop_status {mem.desktop_status}")
-                # print(f"web_status {mem.web_status}")
-                # print(f"mobile_status {mem.mobile_status}")
-                # print("\n")
-                                      
+                        await update_gamba_points(mem.id, points_online)                                      
     return
 
-@bot.command(name='gambaflip',aliases=['flip'], help='Coin flip gamba. Usage: gambaflip {points}')
+########################### Gamba games ###########################
+@bot.command(name='gambaflip',help='Coin flip gamba. Usage: gambaflip {points}', aliases=['flip'])
 async def gamba_flip(ctx):
     userID = ctx.author.id
     userName = ctx.author.name
@@ -603,7 +611,7 @@ async def gamba_flip(ctx):
     if(not in_bot_channel):
         await bot_cleanup(ctx, message)
 
-@bot.command(name='gambaroll', aliases=['roll'], help='Guess dice result. Win 2x bet. Usage: gambaroll {points} {1-6}')
+@bot.command(name='gambaroll',help='Guess dice result. Win 2x bet. Usage: gambaroll {points} {1-6}',aliases=['roll'])
 async def gamba_roll(ctx):
     userID = ctx.author.id
     userName = ctx.author.name
@@ -666,14 +674,28 @@ async def gamba_slots(ctx):
         if(not in_bot_channel):
             await bot_cleanup(ctx, message)
         return
-    if not points_to_bet[1].isnumeric():
-        message = await ctx.send(f"Second parameter is not a number, what you doin")     
-        #clean up
-        if(not in_bot_channel):
-            await bot_cleanup(ctx, message)      
-        return
-        
-    points_to_bet = int(points_to_bet[1])    
+
+    if "%" not in points_to_bet[1]:
+        if not points_to_bet[1].isnumeric():
+            message = await ctx.send(f"Second parameter is not a number, what you doin")     
+            #clean up
+            if(not in_bot_channel):
+                await bot_cleanup(ctx, message)      
+            return
+        points_to_bet = int(points_to_bet[1])    
+    else:
+        if points_to_bet[1][:-1].isnumeric():
+            maybe_points = int(points_to_bet[1][:-1])            
+            if maybe_points > 0 and maybe_points <= 100:
+                points_available = await gamba_get_points(userID)  
+                points_to_bet = int((points_available * maybe_points) / 100)
+            else:
+                message = await ctx.send(f"Too big or too small, stahp")     
+                #clean up
+                if(not in_bot_channel):
+                    await bot_cleanup(ctx, message)      
+                return
+            
     points_available = await gamba_get_points(userID)
     
     if points_to_bet > points_available:
@@ -745,10 +767,10 @@ async def gamba_slots(ctx):
             
     embed = discord.Embed(
         title=(
-            f'You {result[0]} {result[1]} credits'+
+            f"{userName} {result[0]} {str(format(int(result[1]), ',d'))} credits"+
             ('.' if result[0] == 'lost' else '!') # happy or sad based on outcome
         ),
-        description=( f"You have {points_available} points"),
+        description=( f"You have {str(format(int(points_available), ',d'))} points"),
         color=(
             discord.Color.red() if result[0] == "lost"
             else discord.Color.green()
@@ -760,9 +782,8 @@ async def gamba_slots(ctx):
     message = await ctx.send(file=file, embed=embed)
     os.remove(fp)
     if(not in_bot_channel):
-        await bot_cleanup(ctx, message)
-    
-        
+        await bot_cleanup(ctx, message)            
+
 #====================================================================================================================
 ########################################################################
 @bot.command(name='test', help='my test function')
